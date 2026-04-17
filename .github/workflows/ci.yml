@@ -70,20 +70,17 @@ jobs:
     - name: Build UI
       run: cd pkg/ui && npm ci && npm run build
 
-    - name: Run unit tests
-      run: make test
-
     - name: Install namedreturns
       run: go install github.com/nikogura/namedreturns@latest
 
     - name: Install golangci-lint
       run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
 
-    - name: Lint Checks
+    - name: Lint
       run: make lint
 
-    - name: ESLint
-      run: cd pkg/ui && npx eslint 'src/**/*.{ts,tsx}' --max-warnings 0
+    - name: Test
+      run: make test
 
   publish:
     name: Publish

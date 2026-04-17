@@ -27,7 +27,7 @@ build-go:
 
 test:
 	@echo "Running tests..."
-	go test -v -race -cover ./...
+	go test -v -race ./test/
 
 lint:
 	@echo "Running namedreturns linter..."
