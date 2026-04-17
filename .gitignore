@@ -12,7 +12,6 @@ pkg/ui/dist/
 pkg/ui/out/
 pkg/ui/.turbo/
 pkg/ui/.cache/
-pkg/ui/package-lock.json
 
 # IDE
 .idea/
