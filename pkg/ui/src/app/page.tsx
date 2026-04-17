@@ -8,12 +8,15 @@ import { CreatePolicyDialog } from "@/components/CreatePolicyDialog";
 import { NamespaceSelector } from "@/components/NamespaceSelector";
 import { PolicyTable } from "@/components/PolicyTable";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { fetchPolicies } from "@/lib/api";
-import type { PolicyView } from "@/types";
+import { fetchConfig, fetchPolicies } from "@/lib/api";
+import type { AppConfig, PolicyView } from "@/types";
 
 const REFRESH_INTERVAL_MS = 30000;
 
+const IN_CLUSTER_NAME = String();
+
 export default function DashboardPage(): React.ReactElement {
+  const [config, setConfig] = useState<AppConfig | null>(null);
   const [cluster, setCluster] = useState<string | null>(null);
   const [namespace, setNamespace] = useState<string | null>(null);
   const [policies, setPolicies] = useState<readonly PolicyView[]>([]);
@@ -23,13 +26,32 @@ export default function DashboardPage(): React.ReactElement {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  useEffect(() => {
+    const loadConfig = async (): Promise<void> => {
+      try {
+        const result = await fetchConfig();
+        setConfig(result);
+
+        if (result.accessMode !== "local") {
+          setCluster(IN_CLUSTER_NAME);
+        }
+      } catch {
+        setConfig({ accessMode: "local", inCluster: false, allowedNamespaces: null, fixedNamespace: null });
+      }
+    };
+
+    void loadConfig();
+  }, []);
+
+  const effectiveCluster = config && config.accessMode !== "local" ? IN_CLUSTER_NAME : cluster;
+
   const loadPolicies = useCallback(async (): Promise<void> => {
-    if (!cluster || !namespace) return;
+    if (effectiveCluster === null || !namespace) return;
 
     try {
       setLoading(true);
       setError(null);
-      const result = await fetchPolicies({ cluster, namespace });
+      const result = await fetchPolicies({ cluster: effectiveCluster, namespace });
       setPolicies(result);
       setLastUpdated(new Date());
     } catch (err) {
@@ -38,14 +60,14 @@ export default function DashboardPage(): React.ReactElement {
     } finally {
       setLoading(false);
     }
-  }, [cluster, namespace]);
+  }, [effectiveCluster, namespace]);
 
   useEffect(() => {
     void loadPolicies();
   }, [loadPolicies]);
 
   useEffect(() => {
-    if (!cluster || !namespace) return;
+    if (effectiveCluster === null || !namespace) return;
 
     intervalRef.current = setInterval(() => {
       void loadPolicies();
@@ -56,7 +78,7 @@ export default function DashboardPage(): React.ReactElement {
         clearInterval(intervalRef.current);
       }
     };
-  }, [cluster, namespace, loadPolicies]);
+  }, [effectiveCluster, namespace, loadPolicies]);
 
   const handleClusterChange = (newCluster: string): void => {
     setCluster(newCluster);
@@ -67,6 +89,8 @@ export default function DashboardPage(): React.ReactElement {
   const handleNamespaceChange = (newNamespace: string): void => {
     setNamespace(newNamespace);
   };
+
+  const isLocalMode = !config || config.accessMode === "local";
 
   const handleRefresh = (): void => {
     void loadPolicies();
@@ -106,14 +130,18 @@ export default function DashboardPage(): React.ReactElement {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <ClusterSelector
-            selectedCluster={cluster}
-            onClusterChange={handleClusterChange}
-          />
+          {isLocalMode && (
+            <ClusterSelector
+              selectedCluster={cluster}
+              onClusterChange={handleClusterChange}
+            />
+          )}
           <NamespaceSelector
-            cluster={cluster}
+            cluster={effectiveCluster}
             selectedNamespace={namespace}
             onNamespaceChange={handleNamespaceChange}
+            fixedNamespace={config?.fixedNamespace ?? null}
+            allowedNamespaces={config?.allowedNamespaces ?? null}
           />
           <ThemeToggle />
         </div>
@@ -147,7 +175,7 @@ export default function DashboardPage(): React.ReactElement {
             <button
               type="button"
               onClick={(): void => setShowCreateDialog(true)}
-              disabled={!cluster || !namespace}
+              disabled={effectiveCluster === null || !namespace}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -159,8 +187,8 @@ export default function DashboardPage(): React.ReactElement {
                 color: "var(--button-text)",
                 fontSize: "14px",
                 fontWeight: 600,
-                cursor: !cluster || !namespace ? "not-allowed" : "pointer",
-                opacity: !cluster || !namespace ? 0.5 : 1,
+                cursor: effectiveCluster === null || !namespace ? "not-allowed" : "pointer",
+                opacity: effectiveCluster === null || !namespace ? 0.5 : 1,
               }}
             >
               <Plus size={16} />
@@ -207,10 +235,10 @@ export default function DashboardPage(): React.ReactElement {
             <RefreshCw size={20} />
             <span style={{ marginLeft: "8px", fontSize: "14px" }}>Loading policies...</span>
           </div>
-        ) : cluster && namespace ? (
+        ) : effectiveCluster !== null && namespace ? (
           <PolicyTable
             policies={policies}
-            cluster={cluster}
+            cluster={effectiveCluster}
             onPolicyUpdated={handlePolicyUpdated}
           />
         ) : (
@@ -223,14 +251,14 @@ export default function DashboardPage(): React.ReactElement {
             borderRadius: "8px",
             border: "1px solid var(--border-color)",
           }}>
-            Select a cluster and namespace to view image policies.
+            {isLocalMode ? "Select a cluster and namespace to view image policies." : "Select a namespace to view image policies."}
           </div>
         )}
       </main>
 
-      {cluster && namespace && (
+      {effectiveCluster !== null && namespace && (
         <CreatePolicyDialog
-          cluster={cluster}
+          cluster={effectiveCluster}
           namespace={namespace}
           isOpen={showCreateDialog}
           onClose={(): void => setShowCreateDialog(false)}

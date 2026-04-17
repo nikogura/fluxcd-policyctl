@@ -1,4 +1,4 @@
-import type { ClusterInfo, CreatePolicyRequest, PolicyView } from "@/types";
+import type { AppConfig, ClusterInfo, CreatePolicyRequest, PolicyView } from "@/types";
 
 const API_BASE = "/api";
 
@@ -49,6 +49,11 @@ interface ClustersResponse {
 
 interface NamespacesResponse {
   readonly namespaces: readonly string[];
+}
+
+export async function fetchConfig(): Promise<AppConfig> {
+  const result = await apiCall<AppConfig>({ path: "/config" });
+  return result;
 }
 
 export async function fetchClusters(): Promise<readonly ClusterInfo[]> {

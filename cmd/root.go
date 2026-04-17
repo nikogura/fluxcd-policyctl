@@ -45,6 +45,12 @@ var oidcAudience string
 //nolint:gochecknoglobals // Cobra boilerplate
 var oidcGroups string
 
+//nolint:gochecknoglobals // Cobra boilerplate
+var accessMode string
+
+//nolint:gochecknoglobals // Cobra boilerplate
+var allowedNamespaces string
+
 // rootCmd represents the base command when called without any subcommands.
 //
 //nolint:gochecknoglobals // Cobra boilerplate
@@ -91,11 +97,58 @@ Example (with OIDC authentication):
 			authConfig.AllowedGroups = strings.Split(oidcGroups, ",")
 		}
 
-		err = policyctl.RunServer(address, namespace, authConfig, logger)
+		// Resolve access mode: flag takes precedence, then env var, then default.
+		resolvedMode := resolveAccessMode()
+		if !policyctl.IsValidAccessMode(resolvedMode) {
+			logger.Fatal("Invalid access mode",
+				zap.String("mode", resolvedMode),
+				zap.Strings("valid", policyctl.ValidAccessModes()),
+			)
+		}
+
+		accessConfig := &policyctl.AccessConfig{
+			Mode: resolvedMode,
+		}
+
+		// Resolve allowed namespaces for "namespaces" mode.
+		resolvedNS := resolveAllowedNamespaces()
+		if resolvedNS != "" {
+			accessConfig.AllowedNamespaces = strings.Split(resolvedNS, ",")
+		}
+
+		err = policyctl.RunServer(address, namespace, authConfig, accessConfig, logger)
 		if err != nil {
 			logger.Fatal("Failed to start server", zap.Error(err))
 		}
 	},
+}
+
+// resolveAccessMode returns the access mode from the flag, falling back to the env var, then to "local".
+func resolveAccessMode() (mode string) {
+	if accessMode != "" {
+		mode = accessMode
+		return mode
+	}
+
+	envMode := os.Getenv("POLICYCTL_ACCESS_MODE")
+	if envMode != "" {
+		mode = envMode
+		return mode
+	}
+
+	mode = "local"
+	return mode
+}
+
+// resolveAllowedNamespaces returns the allowed namespaces from the flag, falling back to the env var.
+func resolveAllowedNamespaces() (ns string) {
+	if allowedNamespaces != "" {
+		ns = allowedNamespaces
+		return ns
+	}
+
+	ns = os.Getenv("POLICYCTL_NAMESPACES")
+	return ns
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -116,4 +169,6 @@ func init() {
 	rootCmd.Flags().StringVar(&oidcIssuer, "oidc-issuer", "", "OIDC issuer URL (enables authentication when set)")
 	rootCmd.Flags().StringVar(&oidcAudience, "oidc-audience", "", "OIDC audience for token validation")
 	rootCmd.Flags().StringVar(&oidcGroups, "oidc-groups", "", "Comma-separated list of allowed OIDC groups")
+	rootCmd.Flags().StringVarP(&accessMode, "access-mode", "m", "", "Access mode: local, cluster, namespaces, namespace (default \"local\", env: POLICYCTL_ACCESS_MODE)")
+	rootCmd.Flags().StringVar(&allowedNamespaces, "allowed-namespaces", "", "Comma-separated list of allowed namespaces for 'namespaces' mode (env: POLICYCTL_NAMESPACES)")
 }

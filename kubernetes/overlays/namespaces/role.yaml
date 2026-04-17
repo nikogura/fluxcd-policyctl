@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fluxcd-policyctl
+  namespace: CHANGEME
+rules:
+  - apiGroups: ["image.toolkit.fluxcd.io"]
+    resources: ["imagepolicies"]
+    verbs: ["get", "list", "create", "update", "patch", "delete"]
+  - apiGroups: ["image.toolkit.fluxcd.io"]
+    resources: ["imagerepositories"]
+    verbs: ["get", "list"]

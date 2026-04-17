@@ -8,6 +8,8 @@ interface NamespaceSelectorProps {
   readonly cluster: string | null;
   readonly selectedNamespace: string | null;
   readonly onNamespaceChange: (namespace: string) => void;
+  readonly fixedNamespace?: string | null;
+  readonly allowedNamespaces?: readonly string[] | null;
 }
 
 const DEFAULT_NAMESPACE = "flux-system";
@@ -37,12 +39,26 @@ const errorSelectStyle: React.CSSProperties = {
   opacity: 0.6,
 };
 
-export function NamespaceSelector({ cluster, selectedNamespace, onNamespaceChange }: NamespaceSelectorProps): React.ReactElement {
+const staticLabelStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  border: "1px solid var(--border-color)",
+  borderRadius: "4px",
+  backgroundColor: "var(--bg-color)",
+  color: "var(--text-color)",
+  fontSize: "14px",
+};
+
+export function NamespaceSelector({ cluster, selectedNamespace, onNamespaceChange, fixedNamespace, allowedNamespaces }: NamespaceSelectorProps): React.ReactElement {
   const [namespaces, setNamespaces] = useState<readonly string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (fixedNamespace) {
+      onNamespaceChange(fixedNamespace);
+      return;
+    }
+
     if (!cluster) return;
 
     let cancelled = false;
@@ -53,11 +69,16 @@ export function NamespaceSelector({ cluster, selectedNamespace, onNamespaceChang
         setError(null);
         const result = await fetchNamespaces({ cluster });
         if (cancelled) return;
-        setNamespaces(result);
+
+        const filtered = allowedNamespaces
+          ? result.filter((ns) => allowedNamespaces.includes(ns))
+          : result;
+
+        setNamespaces(filtered);
 
         if (!selectedNamespace) {
-          const hasDefault = result.includes(DEFAULT_NAMESPACE);
-          onNamespaceChange(hasDefault ? DEFAULT_NAMESPACE : result[0]);
+          const hasDefault = filtered.includes(DEFAULT_NAMESPACE);
+          onNamespaceChange(hasDefault ? DEFAULT_NAMESPACE : filtered[0]);
         }
       } catch (err) {
         if (cancelled) return;
@@ -75,7 +96,16 @@ export function NamespaceSelector({ cluster, selectedNamespace, onNamespaceChang
     return (): void => {
       cancelled = true;
     };
-  }, [cluster]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cluster, fixedNamespace, allowedNamespaces]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (fixedNamespace) {
+    return (
+      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", fontWeight: 500, color: "var(--text-color)" }}>
+        Namespace
+        <span style={staticLabelStyle}>{fixedNamespace}</span>
+      </label>
+    );
+  }
 
   if (!cluster) {
     return (

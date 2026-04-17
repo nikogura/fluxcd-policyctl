@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fluxcd-policyctl
+  namespace: flux-system
+spec:
+  template:
+    spec:
+      containers:
+        - name: fluxcd-policyctl
+          env:
+            - name: POLICYCTL_ACCESS_MODE
+              value: "namespace"

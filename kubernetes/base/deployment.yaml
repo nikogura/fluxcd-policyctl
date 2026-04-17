@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fluxcd-policyctl
+  namespace: flux-system
+  labels:
+    app: fluxcd-policyctl
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fluxcd-policyctl
+  template:
+    metadata:
+      labels:
+        app: fluxcd-policyctl
+    spec:
+      serviceAccountName: fluxcd-policyctl
+      containers:
+        - name: fluxcd-policyctl
+          image: ghcr.io/nikogura/fluxcd-policyctl:latest
+          ports:
+            - containerPort: 9999
+              protocol: TCP
+          env:
+            - name: POLICYCTL_ACCESS_MODE
+              value: ""
+            - name: POLICYCTL_NAMESPACES
+              value: ""
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9999
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9999
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"

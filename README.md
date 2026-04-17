@@ -2,36 +2,69 @@
 
 **Flux CD Image Policy Control**
 
-A web-based tool for managing Flux CD ImagePolicies. Non-technical users select
-container image versions through a friendly UI; Flux handles the actual
-deployment through its GitOps reconciliation loop.
+A web-based tool for managing Flux CD ImagePolicies. Non-technical users select container image versions through a friendly UI; Flux handles the actual deployment through its GitOps reconciliation loop.
+
+ImageRepositories (the image sources) are managed via GitOps. This tool only controls ImagePolicies (the version selection).
 
 ## Features
 
-- **Full ImagePolicy CRUD** -- Create, read, update, and delete Flux CD
-  ImagePolicy resources directly from the browser.
-- **Multi-cluster support** -- Manage policies across multiple Kubernetes
-  clusters from a single instance.
-- **Optional OIDC authentication** -- Integrate with any OpenID Connect
-  provider to control who can modify policies.
-- **Embedded SPA** -- A Next.js frontend is compiled into the Go binary at
-  build time. No separate web server required.
-- **Single binary** -- One statically-linked executable. No runtime
-  dependencies beyond a kubeconfig.
+- **Full ImagePolicy CRUD** — Create, read, update, and delete Flux CD ImagePolicy resources from the browser
+- **Four access modes** — local (kubeconfig), cluster-wide, namespace list, or single namespace
+- **Multi-cluster support** — Manage policies across multiple Kubernetes clusters in local mode
+- **In-cluster deployment** — Run as a pod with Kustomize overlays or Helm chart
+- **Optional OIDC authentication** — Integrate with any OpenID Connect provider
+- **Dark/light mode** — Theme toggle with dark as default
+- **Embedded SPA** — Next.js frontend compiled into a single Go binary
+- **No runtime dependencies** — One statically-linked executable
 
 ## Quick Start
 
-### Install script (Linux / macOS)
+### Local (uses your kubeconfig)
 
 ```bash
+# Install script
 curl -sSL https://raw.githubusercontent.com/nikogura/fluxcd-policyctl/main/install.sh | sh
+
+# Or download from releases
+# https://github.com/nikogura/fluxcd-policyctl/releases
+
+# Or go install
+go install github.com/nikogura/fluxcd-policyctl@latest
+
+# Run
+fluxcd-policyctl
 ```
 
-### Download a release binary
+Then open http://localhost:9999.
 
-Grab the latest release from the
-[Releases](https://github.com/nikogura/fluxcd-policyctl/releases) page, make it
-executable, and run it.
+### Kubernetes (Kustomize)
+
+```bash
+# Single namespace (own namespace only)
+kubectl apply -k kubernetes/overlays/namespace
+
+# Full cluster access
+kubectl apply -k kubernetes/overlays/cluster
+
+# Specific namespaces
+# Edit kubernetes/overlays/namespaces/config-patch.yaml first
+kubectl apply -k kubernetes/overlays/namespaces
+```
+
+### Kubernetes (Helm)
+
+```bash
+# Single namespace (default)
+helm install policyctl charts/fluxcd-policyctl -n flux-system
+
+# Full cluster access
+helm install policyctl charts/fluxcd-policyctl -n flux-system --set accessMode=cluster
+
+# Specific namespaces
+helm install policyctl charts/fluxcd-policyctl -n flux-system \
+  --set accessMode=namespaces \
+  --set allowedNamespaces="dev-01\,stage-01"
+```
 
 ### Docker
 
@@ -41,125 +74,167 @@ docker run --rm -p 9999:9999 \
   ghcr.io/nikogura/fluxcd-policyctl:latest
 ```
 
-### Go install
+## Access Modes
+
+| Mode | Flag / Env | Description | Cluster Selector | Namespace Selector |
+|------|-----------|-------------|-----------------|-------------------|
+| **local** | `--access-mode=local` / `POLICYCTL_ACCESS_MODE=local` | Uses kubeconfig. Multi-cluster. | Dropdown | Dropdown (all) |
+| **cluster** | `--access-mode=cluster` / `POLICYCTL_ACCESS_MODE=cluster` | In-cluster. All namespaces. | Hidden | Dropdown (all) |
+| **namespaces** | `--access-mode=namespaces` / `POLICYCTL_ACCESS_MODE=namespaces` | In-cluster. Allowed namespaces only. | Hidden | Dropdown (filtered) |
+| **namespace** | `--access-mode=namespace` / `POLICYCTL_ACCESS_MODE=namespace` | In-cluster. Own namespace only. | Hidden | Static label |
+
+When running locally (`--access-mode=local`, the default), the tool uses your kubeconfig and can access any cluster and namespace you have access to.
+
+When running in a Kubernetes cluster, the access mode controls what the tool can see and modify. RBAC is enforced at the Kubernetes level — the tool's ServiceAccount only has access to what the Role/ClusterRole grants.
+
+For the `namespaces` mode, set the allowed namespace list:
 
 ```bash
-go install github.com/nikogura/fluxcd-policyctl@latest
-```
+# Via flag
+fluxcd-policyctl --access-mode=namespaces --allowed-namespaces=dev-01,stage-01
 
-Then open [http://localhost:9999](http://localhost:9999) in your browser.
+# Via env var
+POLICYCTL_ACCESS_MODE=namespaces POLICYCTL_NAMESPACES=dev-01,stage-01 fluxcd-policyctl
+```
 
 ## Configuration
 
-All configuration is through CLI flags.
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--bind-address` | `:9999` | Address and port to listen on |
-| `--kubeconfig` | `~/.kube/config` | Path to kubeconfig file |
-| `--context` | (current context) | Kubernetes context to use |
-| `--oidc-issuer` | (none) | OIDC issuer URL (enables authentication) |
-| `--oidc-client-id` | (none) | OIDC client ID |
-| `--oidc-client-secret` | (none) | OIDC client secret |
-| `--oidc-redirect-url` | (none) | OIDC redirect URL |
-| `--log-level` | `info` | Log level (debug, info, warn, error) |
+| Flag | Env Var | Default | Description |
+|------|---------|---------|-------------|
+| `--bind-address`, `-b` | — | `0.0.0.0:9999` | Listen address |
+| `--namespace`, `-n` | — | `flux-system` | Default namespace for Flux resources |
+| `--access-mode`, `-m` | `POLICYCTL_ACCESS_MODE` | `local` | Access mode (local/cluster/namespaces/namespace) |
+| `--allowed-namespaces` | `POLICYCTL_NAMESPACES` | — | Comma-separated namespace list (namespaces mode) |
+| `--oidc-issuer` | — | — | OIDC issuer URL (enables auth when set) |
+| `--oidc-audience` | — | — | OIDC audience for token validation |
+| `--oidc-groups` | — | — | Comma-separated allowed OIDC groups |
+| `--verbose`, `-v` | — | `false` | Verbose logging |
+| `--log-level`, `-l` | — | `info` | Log level (debug/info/warn/error) |
 
 ## API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/policies` | List all ImagePolicies |
-| `GET` | `/api/v1/policies/:namespace/:name` | Get a single ImagePolicy |
-| `POST` | `/api/v1/policies` | Create an ImagePolicy |
-| `PUT` | `/api/v1/policies/:namespace/:name` | Update an ImagePolicy |
-| `DELETE` | `/api/v1/policies/:namespace/:name` | Delete an ImagePolicy |
-| `GET` | `/api/v1/clusters` | List configured clusters |
-| `GET` | `/api/v1/health` | Health check |
-| `GET` | `/` | Serve the embedded UI |
+| `GET` | `/health` | Health check |
+| `GET` | `/api/config` | Access mode and constraints (for frontend) |
+| `GET` | `/api/user` | Current user (OIDC) or 204 |
+| `GET` | `/api/clusters` | List kubeconfig contexts (local mode) |
+| `GET` | `/api/namespaces?cluster={ctx}` | List namespaces |
+| `GET` | `/api/policies?cluster={ctx}&namespace={ns}` | List ImagePolicies |
+| `POST` | `/api/policies?cluster={ctx}` | Create ImagePolicy |
+| `GET` | `/api/policies/{namespace}/{name}?cluster={ctx}` | Get single policy |
+| `PUT` | `/api/policies/{namespace}/{name}?cluster={ctx}` | Update semver range |
+| `DELETE` | `/api/policies/{namespace}/{name}?cluster={ctx}` | Delete policy |
+
+## Kubernetes Deployment
+
+### RBAC Requirements
+
+| Access Mode | RBAC | Resources |
+|-------------|------|-----------|
+| **cluster** | ClusterRole | imagepolicies (CRUD), imagerepositories (read), namespaces (list) |
+| **namespaces** | Role per namespace | imagepolicies (CRUD), imagerepositories (read) |
+| **namespace** | Role in own namespace | imagepolicies (CRUD), imagerepositories (read) |
+
+### Kustomize
+
+```
+kubernetes/
+  base/                   # Deployment, Service, ServiceAccount
+  overlays/
+    cluster/              # ClusterRole for full access
+    namespaces/           # Role templates for specific namespaces
+    namespace/            # Role for own namespace only
+```
+
+### Helm Chart
+
+```bash
+helm install policyctl charts/fluxcd-policyctl \
+  -n flux-system \
+  --set accessMode=cluster \
+  --set oidc.enabled=true \
+  --set oidc.issuerUrl=https://dex.example.com \
+  --set oidc.audience=fluxcd-policyctl
+```
+
+See `charts/fluxcd-policyctl/values.yaml` for all configurable values.
 
 ## Architecture
 
-fluxcd-policyctl is a single Go binary with an embedded Next.js frontend.
-
 ```
-fluxcd-policyctl
-├── cmd/            # Cobra CLI commands
+fluxcd-policyctl/
+├── cmd/                    # Cobra CLI
 ├── pkg/
-│   ├── policyctl/  # Core business logic, Kubernetes client
-│   └── ui/         # Next.js app + Go embed directive
-├── test/           # Integration / E2E tests
-├── main.go         # Entry point
-└── Makefile
+│   ├── policyctl/          # HTTP server, handlers, K8s client, OIDC auth
+│   └── ui/                 # Next.js app + go:embed
+├── test/                   # Go tests
+├── kubernetes/             # Kustomize manifests
+├── charts/                 # Helm chart
+├── main.go
+├── Makefile
+└── Dockerfile
 ```
 
-At build time the Next.js app is compiled to static files under `pkg/ui/dist`,
-which are embedded into the binary via `//go:embed`. The Go HTTP server serves
-the API on `/api/` and the SPA on all other routes.
+The Next.js frontend is compiled to static files at build time and embedded into the binary via `//go:embed`. The Go HTTP server serves the API on `/api/` and the SPA on all other routes. No Gin, no gorilla/mux — pure `net/http` stdlib.
 
 ## Development
 
 ### Prerequisites
 
-- Go 1.24+
+- Go 1.25+
 - Node.js 18+
-- `golangci-lint`
 - `namedreturns` (`go install github.com/nikogura/namedreturns@latest`)
+- `golangci-lint` v2 (`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest`)
 
-### Make targets
+### Workflow
+
+```bash
+# Lint first
+make lint
+
+# Then test
+make test
+
+# Build (UI + binary)
+make build
+
+# Run locally
+./fluxcd-policyctl
+```
 
 | Target | Description |
 |--------|-------------|
-| `make build` | Build the UI and Go binary |
-| `make build-ui` | Build the Next.js frontend only |
-| `make build-go` | Build the Go binary only |
-| `make test` | Run all Go tests |
-| `make lint` | Run namedreturns, golangci-lint, and ESLint |
+| `make build` | Build UI and Go binary |
+| `make build-ui` | Build Next.js frontend only |
+| `make build-go` | Build Go binary only |
+| `make lint` | namedreturns + golangci-lint + ESLint |
+| `make test` | Run Go tests |
 | `make clean` | Remove build artifacts |
-| `make docker-build` | Build the Docker image |
-
-### Typical workflow
-
-```bash
-# Install tools
-go install github.com/nikogura/namedreturns@latest
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-
-# Run linters
-make lint
-
-# Run tests
-make test
-
-# Build
-make build
-```
+| `make docker-build` | Build Docker image |
 
 ## Security
 
-### When to enable OIDC
-
-If fluxcd-policyctl is exposed beyond localhost -- for example behind an ingress
-or shared on a team network -- enable OIDC authentication so that only
-authorized users can modify ImagePolicies.
+When deployed beyond localhost, enable OIDC:
 
 ```bash
 fluxcd-policyctl \
-  --oidc-issuer=https://accounts.example.com \
-  --oidc-client-id=fluxcd-policyctl \
-  --oidc-client-secret=<secret> \
-  --oidc-redirect-url=https://policyctl.example.com/callback
+  --oidc-issuer=https://dex.example.com \
+  --oidc-audience=fluxcd-policyctl \
+  --oidc-groups=engineering,ops
 ```
 
-When OIDC is not configured the server runs without authentication, suitable
-for local development or environments where network-level access control is
-sufficient.
+Without OIDC, all endpoints are open — suitable for local development or environments with network-level access control.
 
-### Kubernetes RBAC
-
-fluxcd-policyctl requires a ServiceAccount (or kubeconfig identity) with
-permissions to list, get, create, update, and delete ImagePolicy resources in
-the target namespaces.
+In-cluster deployments should use the most restrictive access mode appropriate:
+- **namespace** for team-specific instances (one per team/environment)
+- **namespaces** for shared instances with scoped access
+- **cluster** only when broad access is required and OIDC is enabled
 
 ## License
 
-Apache 2.0. See [LICENSE](LICENSE) for the full text.
+Apache 2.0. See [LICENSE](LICENSE).
+
+---
+
+*Built by [Nik Ogura](https://nikogura.com) at [KATN Solutions](https://katn-solutions.io).*

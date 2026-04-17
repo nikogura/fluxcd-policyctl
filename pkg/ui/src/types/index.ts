@@ -26,3 +26,10 @@ export interface ClusterInfo {
   readonly name: string;
   readonly current: boolean;
 }
+
+export interface AppConfig {
+  readonly accessMode: "local" | "cluster" | "namespaces" | "namespace";
+  readonly inCluster: boolean;
+  readonly allowedNamespaces: readonly string[] | null;
+  readonly fixedNamespace: string | null;
+}
