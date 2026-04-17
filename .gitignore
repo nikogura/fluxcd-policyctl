@@ -1,0 +1,26 @@
+# Binary
+fluxcd-policyctl
+release-assets/
+
+# Go
+vendor/
+
+# Node / UI build artifacts
+pkg/ui/node_modules/
+pkg/ui/.next/
+pkg/ui/dist/
+pkg/ui/out/
+pkg/ui/.turbo/
+pkg/ui/.cache/
+pkg/ui/package-lock.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

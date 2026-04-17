@@ -1,0 +1,42 @@
+{
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint", "no-floating-promise", "import", "eslint-plugin-local-rules", "security"],
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended", "next/core-web-vitals"],
+  "rules": {
+    "no-console": ["error", { "allow": ["warn", "error"] }],
+    "@typescript-eslint/explicit-function-return-type": "error",
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/no-unused-vars": ["error", { "args": "after-used", "argsIgnorePattern": "^_" }],
+    "no-floating-promise/no-floating-promise": 2,
+    "prefer-template": "error",
+    "import/order": [
+      "error",
+      {
+        "groups": ["builtin", "external", "internal", "parent", "sibling", "index", "object"],
+        "newlines-between": "always",
+        "alphabetize": { "order": "asc", "caseInsensitive": true }
+      }
+    ],
+    "@typescript-eslint/naming-convention": [
+      "error",
+      { "selector": "variable", "format": ["camelCase", "UPPER_CASE", "PascalCase"] },
+      { "selector": "function", "format": ["camelCase", "PascalCase"] },
+      { "selector": "typeLike", "format": ["PascalCase"] }
+    ],
+    "local-rules/disallow-foreach": 2,
+    "local-rules/disallow-then": 2,
+    "local-rules/disallow-catch": 2,
+    "local-rules/disallow-axios": 2,
+    "local-rules/disallow-fetch": 2,
+    "local-rules/disallow-multiple-function-arguments": 2,
+    "local-rules/enforce-readonly-fields": 2,
+    "local-rules/enforce-readonly-array": 2,
+    "local-rules/disallow-empty-string": 2
+  },
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "node": true
+  },
+  "ignorePatterns": ["next.config.js", "postcss.config.js", "tailwind.config.js", "eslint-local-rules.js"]
+}

@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  GO_VERSION: '1.24'
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    outputs:
+      version_tag: ${{ steps.semver.outputs.version_tag }}
+      version: ${{ steps.semver.outputs.version }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Generate Version
+      run: |
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        echo "Last tag: $LAST_TAG"
+
+        # Extract version numbers
+        VERSION=${LAST_TAG#v}
+        IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+        # Increment patch version
+        PATCH=$((PATCH + 1))
+        NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+
+        echo "New version: $NEW_VERSION"
+        echo "version_tag=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "version=${MAJOR}.${MINOR}.${PATCH}" >> $GITHUB_OUTPUT
+      id: semver
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Build UI
+      run: cd pkg/ui && npm ci && npm run build
+
+    - name: Run unit tests
+      run: make test
+
+    - name: Install namedreturns
+      run: go install github.com/nikogura/namedreturns@latest
+
+    - name: Install golangci-lint
+      run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
+
+    - name: Lint Checks
+      run: make lint
+
+    - name: ESLint
+      run: cd pkg/ui && npx eslint 'src/**/*.{ts,tsx}' --max-warnings 0
+
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Build UI
+      run: cd pkg/ui && npm ci && npm run build
+
+    - name: Build release binaries
+      run: |
+        mkdir -p release-assets
+
+        GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o release-assets/fluxcd-policyctl-darwin-amd64 .
+        GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o release-assets/fluxcd-policyctl-darwin-arm64 .
+        GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o release-assets/fluxcd-policyctl-linux-amd64 .
+        GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o release-assets/fluxcd-policyctl-linux-arm64 .
+        GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o release-assets/fluxcd-policyctl-windows-amd64.exe .
+
+        cd release-assets
+        sha256sum * > checksums.txt
+
+    - name: Tag Repo
+      uses: mathieudutour/github-tag-action@v6.2
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        custom_tag: ${{ needs.test.outputs.version_tag }}
+
+    - name: Publish Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ needs.test.outputs.version_tag }}
+        name: ${{ needs.test.outputs.version_tag }}
+        draft: false
+        prerelease: false
+        token: ${{ secrets.GITHUB_TOKEN }}
+        files: |
+          release-assets/*
+        body: |
+          ## Quick Start
+
+          ```bash
+          # Auto-detect platform and install
+          curl -sSL https://raw.githubusercontent.com/nikogura/fluxcd-policyctl/main/install.sh | sh
+
+          # Or download manually for your platform
+          ```
+
+          Then open: **http://localhost:9999**
+
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          ghcr.io/nikogura/fluxcd-policyctl:${{ needs.test.outputs.version }}
+          ghcr.io/nikogura/fluxcd-policyctl:latest
