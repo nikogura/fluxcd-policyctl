@@ -19,7 +19,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"github.com/nikogura/fluxcd-policyctl/pkg/policyctl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,17 +39,16 @@ func TestOIDCMiddlewareDisabled(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, middleware)
 
-	// When auth is disabled, requests should pass through
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	})
+	// When auth is disabled, requests should pass through.
+	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
@@ -58,9 +56,6 @@ func TestOIDCMiddlewareDisabled(t *testing.T) {
 func TestOIDCMiddlewareEnabledRejectsNoToken(t *testing.T) {
 	t.Parallel()
 
-	// This test verifies that when OIDC is enabled with a bogus issuer,
-	// the middleware creation itself fails (can't discover OIDC config).
-	// In production, the issuer must be reachable.
 	config := &policyctl.AuthConfig{
 		Enabled:   true,
 		IssuerURL: "https://nonexistent.example.com",
@@ -70,12 +65,9 @@ func TestOIDCMiddlewareEnabledRejectsNoToken(t *testing.T) {
 	logger, logErr := zap.NewDevelopment()
 	require.NoError(t, logErr)
 
-	// NewOIDCMiddleware with unreachable issuer should fail
+	// NewOIDCMiddleware with unreachable issuer should fail.
 	_, err := policyctl.NewOIDCMiddleware(config, logger)
-	// This will either fail (can't reach issuer) or succeed if there's a timeout.
-	// Either way, the middleware should handle it gracefully.
 	if err != nil {
-		// Expected: can't discover OIDC configuration
 		assert.Contains(t, err.Error(), "OIDC")
 	}
 }

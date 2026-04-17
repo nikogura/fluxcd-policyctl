@@ -16,30 +16,25 @@ package policyctl
 
 import (
 	"fmt"
+	"log"
+	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 // RunServer starts the fluxcd-policyctl web server.
 func RunServer(address string, namespace string, authConfig *AuthConfig, logger *zap.Logger) (err error) {
-	gin.SetMode(gin.ReleaseMode)
-
-	// Initialize services
+	// Initialize services.
 	kubeConfigService := NewKubeConfigService(logger)
 	policyService := NewPolicyService(kubeConfigService, namespace, logger)
 
-	// Set up router
-	router := gin.New()
-	router.Use(gin.Logger())
-	router.Use(gin.Recovery())
-
-	// Set up routes
+	// Set up routes.
+	mux := http.NewServeMux()
 	handler := NewHandler(policyService, kubeConfigService, authConfig, logger)
-	handler.RegisterRoutes(router)
+	handler.RegisterRoutes(mux)
 
-	// Set up UI routes for SPA serving
-	SetupUIRoutes(router)
+	// Set up UI routes for SPA serving.
+	SetupUIRoutes(mux)
 
 	logger.Info("Server starting",
 		zap.String("address", address),
@@ -47,11 +42,32 @@ func RunServer(address string, namespace string, authConfig *AuthConfig, logger 
 		zap.Bool("authEnabled", authConfig.Enabled),
 	)
 
-	runErr := router.Run(address)
+	// Wrap with request logging.
+	logged := loggingMiddleware(logger, mux)
+
+	runErr := http.ListenAndServe(address, logged)
 	if runErr != nil {
 		err = fmt.Errorf("failed to start server: %w", runErr)
 		return err
 	}
 
 	return err
+}
+
+// loggingMiddleware logs each request.
+func loggingMiddleware(logger *zap.Logger, next http.Handler) (handler http.Handler) {
+	handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger.Debug("request",
+			zap.String("method", r.Method),
+			zap.String("path", r.URL.Path),
+			zap.String("remote", r.RemoteAddr),
+		)
+		next.ServeHTTP(w, r)
+	})
+
+	return handler
+}
+
+func init() { //nolint:gochecknoinits // suppress log prefix.
+	log.SetFlags(0)
 }

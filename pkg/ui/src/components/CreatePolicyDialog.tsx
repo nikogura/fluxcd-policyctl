@@ -15,6 +15,32 @@ interface CreatePolicyDialogProps {
 
 const DEFAULT_SEMVER_RANGE = ">=0.0.0";
 
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "8px 12px",
+  border: "1px solid var(--border-color)",
+  borderRadius: "4px",
+  backgroundColor: "var(--bg-color)",
+  color: "var(--text-color)",
+  fontSize: "14px",
+  outline: "none",
+};
+
+const disabledInputStyle: React.CSSProperties = {
+  ...inputStyle,
+  backgroundColor: "var(--bg-secondary)",
+  color: "var(--text-muted)",
+  cursor: "not-allowed",
+};
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  marginBottom: "4px",
+  fontSize: "14px",
+  fontWeight: 500,
+  color: "var(--text-color)",
+};
+
 export function CreatePolicyDialog({ cluster, namespace, isOpen, onClose, onCreated }: CreatePolicyDialogProps): React.ReactElement | null {
   const [policyName, setPolicyName] = useState<string | null>(null);
   const [imageRepository, setImageRepository] = useState<string | null>(null);
@@ -73,24 +99,60 @@ export function CreatePolicyDialog({ cluster, namespace, isOpen, onClose, onCrea
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={handleBackdropClick}
       role="presentation"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 50,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+      }}
     >
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Create Image Policy</h2>
+      <div style={{
+        width: "100%",
+        maxWidth: "450px",
+        borderRadius: "8px",
+        backgroundColor: "var(--bg-color)",
+        padding: "24px",
+        boxShadow: "var(--shadow-lg)",
+      }}>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "16px",
+        }}>
+          <h2 style={{ fontSize: "18px", fontWeight: 600, color: "var(--text-color)" }}>
+            Create Image Policy
+          </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            style={{
+              padding: "4px",
+              border: "none",
+              borderRadius: "4px",
+              backgroundColor: "transparent",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+            }}
           >
-            <X className="h-5 w-5" />
+            <X size={20} />
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div style={{
+            marginBottom: "16px",
+            padding: "8px 12px",
+            borderRadius: "4px",
+            backgroundColor: "var(--error-color)",
+            color: "white",
+            fontSize: "14px",
+          }}>
             {error}
           </div>
         )}
@@ -99,10 +161,10 @@ export function CreatePolicyDialog({ cluster, namespace, isOpen, onClose, onCrea
           onSubmit={(e): void => {
             void handleSubmit(e);
           }}
-          className="space-y-4"
+          style={{ display: "flex", flexDirection: "column", gap: "16px" }}
         >
           <div>
-            <label htmlFor="policyName" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="policyName" style={labelStyle}>
               Policy Name
             </label>
             <input
@@ -112,12 +174,12 @@ export function CreatePolicyDialog({ cluster, namespace, isOpen, onClose, onCrea
               onChange={(e): void => setPolicyName(e.target.value || null)}
               placeholder="my-app-policy"
               required
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              style={inputStyle}
             />
           </div>
 
           <div>
-            <label htmlFor="policyNamespace" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="policyNamespace" style={labelStyle}>
               Namespace
             </label>
             <input
@@ -125,12 +187,12 @@ export function CreatePolicyDialog({ cluster, namespace, isOpen, onClose, onCrea
               type="text"
               value={namespace}
               disabled
-              className="w-full rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500"
+              style={disabledInputStyle}
             />
           </div>
 
           <div>
-            <label htmlFor="imageRepo" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="imageRepo" style={labelStyle}>
               Image Repository Name
             </label>
             <input
@@ -140,15 +202,15 @@ export function CreatePolicyDialog({ cluster, namespace, isOpen, onClose, onCrea
               onChange={(e): void => setImageRepository(e.target.value || null)}
               placeholder="my-app"
               required
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              style={inputStyle}
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p style={{ marginTop: "4px", fontSize: "12px", color: "var(--text-muted)" }}>
               Name of an existing Flux ImageRepository resource
             </p>
           </div>
 
           <div>
-            <label htmlFor="semverRange" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="semverRange" style={labelStyle}>
               Semver Range
             </label>
             <input
@@ -158,22 +220,41 @@ export function CreatePolicyDialog({ cluster, namespace, isOpen, onClose, onCrea
               onChange={(e): void => setSemverRange(e.target.value)}
               placeholder=">=1.0.0"
               required
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              style={{ ...inputStyle, fontFamily: "monospace" }}
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", paddingTop: "8px" }}>
             <button
               type="button"
               onClick={onClose}
-              className="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              style={{
+                padding: "8px 16px",
+                border: "1px solid var(--border-color)",
+                borderRadius: "4px",
+                backgroundColor: "var(--bg-color)",
+                color: "var(--text-color)",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-400"
+              style={{
+                padding: "8px 16px",
+                border: "none",
+                borderRadius: "4px",
+                backgroundColor: "var(--button-bg)",
+                color: "var(--button-text)",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: submitting ? "not-allowed" : "pointer",
+                opacity: submitting ? 0.6 : 1,
+              }}
             >
               {submitting ? "Creating..." : "Create Policy"}
             </button>

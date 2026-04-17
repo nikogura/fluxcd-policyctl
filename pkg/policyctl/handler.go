@@ -15,9 +15,9 @@
 package policyctl
 
 import (
+	"encoding/json"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
@@ -40,60 +40,71 @@ func NewHandler(policyService *PolicyService, kubeConfig *KubeConfigService, aut
 	return handler
 }
 
-// RegisterRoutes registers all API routes on the Gin engine.
-func (h *Handler) RegisterRoutes(router *gin.Engine) {
-	// Health check - no auth required
-	router.GET("/health", h.handleHealth)
+// RegisterRoutes registers all API routes on the mux.
+func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	// Health check — no auth.
+	mux.HandleFunc("GET /health", h.handleHealth)
 
-	// User info - no auth required (returns 204 if no auth)
-	router.GET("/api/user", h.handleGetUser)
+	// User info — no auth (returns 204 if disabled).
+	mux.HandleFunc("GET /api/user", h.handleGetUser)
 
-	// API group with optional auth middleware
-	api := router.Group("/api")
-
+	// API routes — optionally wrapped with OIDC middleware.
 	if h.authConfig.Enabled {
 		authMiddleware, authErr := NewOIDCMiddleware(h.authConfig, h.logger)
 		if authErr != nil {
 			h.logger.Fatal("Failed to create OIDC middleware", zap.Error(authErr))
 		}
-		api.Use(authMiddleware)
-	}
 
-	api.GET("/clusters", h.handleGetClusters)
-	api.GET("/namespaces", h.handleGetNamespaces)
-	api.GET("/policies", h.handleListPolicies)
-	api.POST("/policies", h.handleCreatePolicy)
-	api.GET("/policies/:namespace/:name", h.handleGetPolicy)
-	api.PUT("/policies/:namespace/:name", h.handleUpdatePolicy)
-	api.DELETE("/policies/:namespace/:name", h.handleDeletePolicy)
+		mux.Handle("GET /api/clusters", authMiddleware(http.HandlerFunc(h.handleGetClusters)))
+		mux.Handle("GET /api/namespaces", authMiddleware(http.HandlerFunc(h.handleGetNamespaces)))
+		mux.Handle("GET /api/policies", authMiddleware(http.HandlerFunc(h.handleListPolicies)))
+		mux.Handle("POST /api/policies", authMiddleware(http.HandlerFunc(h.handleCreatePolicy)))
+		mux.Handle("GET /api/policies/{namespace}/{name}", authMiddleware(http.HandlerFunc(h.handleGetPolicy)))
+		mux.Handle("PUT /api/policies/{namespace}/{name}", authMiddleware(http.HandlerFunc(h.handleUpdatePolicy)))
+		mux.Handle("DELETE /api/policies/{namespace}/{name}", authMiddleware(http.HandlerFunc(h.handleDeletePolicy)))
+	} else {
+		mux.HandleFunc("GET /api/clusters", h.handleGetClusters)
+		mux.HandleFunc("GET /api/namespaces", h.handleGetNamespaces)
+		mux.HandleFunc("GET /api/policies", h.handleListPolicies)
+		mux.HandleFunc("POST /api/policies", h.handleCreatePolicy)
+		mux.HandleFunc("GET /api/policies/{namespace}/{name}", h.handleGetPolicy)
+		mux.HandleFunc("PUT /api/policies/{namespace}/{name}", h.handleUpdatePolicy)
+		mux.HandleFunc("DELETE /api/policies/{namespace}/{name}", h.handleDeletePolicy)
+	}
+}
+
+// writeJSON writes a JSON response.
+func writeJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(data)
+}
+
+// writeError writes a JSON error response.
+func writeError(w http.ResponseWriter, status int, msg string) {
+	writeJSON(w, status, map[string]string{"error": msg})
 }
 
 // handleHealth returns a simple health check response.
-func (h *Handler) handleHealth(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+func (h *Handler) handleHealth(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "healthy"})
 }
 
 // handleGetUser returns the current user's claims from the OIDC token.
-func (h *Handler) handleGetUser(c *gin.Context) {
-	claims, exists := c.Get("userClaims")
-	if !exists {
-		c.Status(http.StatusNoContent)
+func (h *Handler) handleGetUser(w http.ResponseWriter, r *http.Request) {
+	claims := GetUserClaims(r.Context())
+	if claims == nil {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	userClaims, ok := claims.(UserClaims)
-	if !ok {
-		c.Status(http.StatusNoContent)
-		return
-	}
-
-	c.JSON(http.StatusOK, userClaims)
+	writeJSON(w, http.StatusOK, claims)
 }
 
 // handleGetClusters returns the list of available Kubernetes clusters.
-func (h *Handler) handleGetClusters(c *gin.Context) {
+func (h *Handler) handleGetClusters(w http.ResponseWriter, _ *http.Request) {
 	if h.kubeConfig.IsInCluster() {
-		c.JSON(http.StatusOK, gin.H{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"inCluster": true,
 			"clusters":  []ClusterInfo{},
 		})
@@ -102,113 +113,124 @@ func (h *Handler) handleGetClusters(c *gin.Context) {
 
 	clusters, err := h.kubeConfig.GetClusters()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"inCluster": false,
 		"clusters":  clusters,
 	})
 }
 
 // handleGetNamespaces returns the list of namespaces for a cluster.
-func (h *Handler) handleGetNamespaces(c *gin.Context) {
-	clusterName := c.Query("cluster")
+func (h *Handler) handleGetNamespaces(w http.ResponseWriter, r *http.Request) {
+	clusterName := r.URL.Query().Get("cluster")
 
-	namespaces, err := h.policyService.ListNamespaces(c.Request.Context(), clusterName)
+	namespaces, err := h.policyService.ListNamespaces(r.Context(), clusterName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"namespaces": namespaces})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"namespaces": namespaces})
 }
 
 // handleListPolicies returns the list of ImagePolicies for a cluster and namespace.
-func (h *Handler) handleListPolicies(c *gin.Context) {
-	clusterName := c.Query("cluster")
-	namespace := c.DefaultQuery("namespace", h.policyService.namespace)
+func (h *Handler) handleListPolicies(w http.ResponseWriter, r *http.Request) {
+	clusterName := r.URL.Query().Get("cluster")
+	namespace := r.URL.Query().Get("namespace")
+	if namespace == "" {
+		namespace = h.policyService.namespace
+	}
 
-	policies, err := h.policyService.ListPolicies(c.Request.Context(), clusterName, namespace)
+	policies, err := h.policyService.ListPolicies(r.Context(), clusterName, namespace)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"policies": policies})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"policies": policies})
 }
 
 // handleGetPolicy returns a single ImagePolicy by namespace and name.
-func (h *Handler) handleGetPolicy(c *gin.Context) {
-	clusterName := c.Query("cluster")
-	namespace := c.Param("namespace")
-	name := c.Param("name")
+func (h *Handler) handleGetPolicy(w http.ResponseWriter, r *http.Request) {
+	clusterName := r.URL.Query().Get("cluster")
+	namespace := r.PathValue("namespace")
+	name := r.PathValue("name")
 
-	policy, err := h.policyService.GetPolicy(c.Request.Context(), clusterName, namespace, name)
+	policy, err := h.policyService.GetPolicy(r.Context(), clusterName, namespace, name)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, policy)
+	writeJSON(w, http.StatusOK, policy)
 }
 
 // handleCreatePolicy creates a new ImagePolicy.
-func (h *Handler) handleCreatePolicy(c *gin.Context) {
-	clusterName := c.Query("cluster")
+func (h *Handler) handleCreatePolicy(w http.ResponseWriter, r *http.Request) {
+	clusterName := r.URL.Query().Get("cluster")
 
 	var req CreatePolicyRequest
-	bindErr := c.ShouldBindJSON(&req)
-
-	if bindErr != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindErr.Error()})
+	decodeErr := json.NewDecoder(r.Body).Decode(&req)
+	if decodeErr != nil {
+		writeError(w, http.StatusBadRequest, decodeErr.Error())
 		return
 	}
 
-	err := h.policyService.CreatePolicy(c.Request.Context(), clusterName, req)
+	if req.Name == "" || req.Namespace == "" || req.ImageRepository == "" || req.SemverRange == "" {
+		writeError(w, http.StatusBadRequest, "name, namespace, imageRepository, and semverRange are required")
+		return
+	}
+
+	err := h.policyService.CreatePolicy(r.Context(), clusterName, req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "ImagePolicy created successfully"})
+	writeJSON(w, http.StatusCreated, map[string]string{"message": "ImagePolicy created successfully"})
 }
 
 // handleUpdatePolicy updates the semver range of an existing ImagePolicy.
-func (h *Handler) handleUpdatePolicy(c *gin.Context) {
-	clusterName := c.Query("cluster")
-	namespace := c.Param("namespace")
-	name := c.Param("name")
+func (h *Handler) handleUpdatePolicy(w http.ResponseWriter, r *http.Request) {
+	clusterName := r.URL.Query().Get("cluster")
+	namespace := r.PathValue("namespace")
+	name := r.PathValue("name")
 
 	var req UpdatePolicyRequest
-	bindErr := c.ShouldBindJSON(&req)
-
-	if bindErr != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindErr.Error()})
+	decodeErr := json.NewDecoder(r.Body).Decode(&req)
+	if decodeErr != nil {
+		writeError(w, http.StatusBadRequest, decodeErr.Error())
 		return
 	}
 
-	err := h.policyService.UpdatePolicy(c.Request.Context(), clusterName, namespace, name, req.SemverRange)
+	if req.SemverRange == "" {
+		writeError(w, http.StatusBadRequest, "semverRange is required")
+		return
+	}
+
+	err := h.policyService.UpdatePolicy(r.Context(), clusterName, namespace, name, req.SemverRange)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ImagePolicy updated successfully"})
+	writeJSON(w, http.StatusOK, map[string]string{"message": "ImagePolicy updated successfully"})
 }
 
 // handleDeletePolicy deletes an ImagePolicy.
-func (h *Handler) handleDeletePolicy(c *gin.Context) {
-	clusterName := c.Query("cluster")
-	namespace := c.Param("namespace")
-	name := c.Param("name")
+func (h *Handler) handleDeletePolicy(w http.ResponseWriter, r *http.Request) {
+	clusterName := r.URL.Query().Get("cluster")
+	namespace := r.PathValue("namespace")
+	name := r.PathValue("name")
 
-	err := h.policyService.DeletePolicy(c.Request.Context(), clusterName, namespace, name)
+	err := h.policyService.DeletePolicy(r.Context(), clusterName, namespace, name)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ImagePolicy deleted successfully"})
+	writeJSON(w, http.StatusOK, map[string]string{"message": "ImagePolicy deleted successfully"})
 }

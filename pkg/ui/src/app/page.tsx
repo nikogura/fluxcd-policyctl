@@ -1,12 +1,13 @@
 "use client";
 
-import { AlertTriangle, Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ClusterSelector } from "@/components/ClusterSelector";
 import { CreatePolicyDialog } from "@/components/CreatePolicyDialog";
 import { NamespaceSelector } from "@/components/NamespaceSelector";
 import { PolicyTable } from "@/components/PolicyTable";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { fetchPolicies } from "@/lib/api";
 import type { PolicyView } from "@/types";
 
@@ -87,14 +88,24 @@ export default function DashboardPage(): React.ReactElement {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white px-6 py-4">
-        <h1 className="text-xl font-bold text-gray-900">flux-policyctl</h1>
-        <p className="text-sm text-gray-500">Flux CD Image Policy Control</p>
-      </header>
-
-      <main className="mx-auto max-w-7xl px-6 py-6">
-        <div className="mb-6 flex flex-wrap items-center gap-4">
+    <div style={{ minHeight: "100vh", backgroundColor: "var(--bg-secondary)" }}>
+      <header style={{
+        backgroundColor: "var(--bg-color)",
+        borderBottom: "1px solid var(--border-color)",
+        padding: "1rem",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}>
+        <div>
+          <div style={{ fontWeight: "bold", fontSize: "1.2rem", color: "var(--text-color)" }}>
+            flux-policyctl
+          </div>
+          <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+            Flux CD Image Policy Control
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <ClusterSelector
             selectedCluster={cluster}
             onClusterChange={handleClusterChange}
@@ -104,51 +115,97 @@ export default function DashboardPage(): React.ReactElement {
             selectedNamespace={namespace}
             onNamespaceChange={handleNamespaceChange}
           />
+          <ThemeToggle />
+        </div>
+      </header>
 
-          <div className="ml-auto flex items-center gap-3">
-            <span className="text-xs text-gray-400">
-              Last updated: {formatLastUpdated(lastUpdated)}
-            </span>
+      <main style={{ padding: "2rem", maxWidth: "1280px", margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "1.5rem" }}>
+          <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+            Last updated: {formatLastUpdated(lastUpdated)}
+          </span>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "12px" }}>
             <button
               type="button"
               onClick={handleRefresh}
               disabled={loading}
-              className="rounded border border-gray-300 bg-white p-2 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              style={{
+                padding: "8px",
+                border: "1px solid var(--border-color)",
+                borderRadius: "4px",
+                backgroundColor: "var(--bg-color)",
+                color: "var(--text-muted)",
+                cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.5 : 1,
+                display: "flex",
+                alignItems: "center",
+              }}
               title="Refresh policies"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : null}`} />
+              <RefreshCw size={16} />
             </button>
             <button
               type="button"
               onClick={(): void => setShowCreateDialog(true)}
               disabled={!cluster || !namespace}
-              className="flex items-center gap-1.5 rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-400"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 16px",
+                border: "none",
+                borderRadius: "4px",
+                backgroundColor: "var(--button-bg)",
+                color: "var(--button-text)",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: !cluster || !namespace ? "not-allowed" : "pointer",
+                opacity: !cluster || !namespace ? 0.5 : 1,
+              }}
             >
-              <Plus className="h-4 w-4" />
+              <Plus size={16} />
               Create Policy
             </button>
           </div>
         </div>
 
         {isProductionNamespace && (
-          <div className="mb-6 flex items-center gap-2 rounded border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span>
-              You are viewing a production namespace. Changes here will affect live workloads.
-            </span>
+          <div style={{
+            backgroundColor: "var(--warning-bg)",
+            color: "white",
+            fontWeight: "bold",
+            textAlign: "center",
+            borderRadius: "4px",
+            padding: "0.5rem",
+            marginBottom: "1rem",
+          }}>
+            You are viewing a production namespace. Changes here will affect live workloads.
           </div>
         )}
 
         {error && (
-          <div className="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div style={{
+            marginBottom: "1rem",
+            padding: "8px 12px",
+            borderRadius: "4px",
+            backgroundColor: "var(--error-color)",
+            color: "white",
+            fontSize: "14px",
+          }}>
             {error}
           </div>
         )}
 
         {loading && policies.length === 0 ? (
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
-            <span className="ml-2 text-sm text-gray-500">Loading policies...</span>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "3rem",
+            color: "var(--text-muted)",
+          }}>
+            <RefreshCw size={20} />
+            <span style={{ marginLeft: "8px", fontSize: "14px" }}>Loading policies...</span>
           </div>
         ) : cluster && namespace ? (
           <PolicyTable
@@ -157,7 +214,15 @@ export default function DashboardPage(): React.ReactElement {
             onPolicyUpdated={handlePolicyUpdated}
           />
         ) : (
-          <div className="rounded border border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-500">
+          <div style={{
+            padding: "32px",
+            textAlign: "center",
+            fontSize: "14px",
+            color: "var(--text-muted)",
+            backgroundColor: "var(--bg-color)",
+            borderRadius: "8px",
+            border: "1px solid var(--border-color)",
+          }}>
             Select a cluster and namespace to view image policies.
           </div>
         )}

@@ -13,7 +13,17 @@ export default function RootLayout({
   readonly children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            (function() {
+              var theme = localStorage.getItem('theme') || 'dark';
+              document.documentElement.setAttribute('data-theme', theme);
+            })();
+          `
+        }} />
+      </head>
       <body>{children}</body>
     </html>
   );

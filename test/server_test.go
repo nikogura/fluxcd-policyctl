@@ -21,28 +21,23 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestRouter() (router *gin.Engine) {
-	gin.SetMode(gin.TestMode)
-	router = gin.New()
-	return router
-}
-
 func TestHealthEndpoint(t *testing.T) {
 	t.Parallel()
 
-	router := setupTestRouter()
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -55,15 +50,14 @@ func TestHealthEndpoint(t *testing.T) {
 func TestUserEndpointNoAuth(t *testing.T) {
 	t.Parallel()
 
-	router := setupTestRouter()
-	router.GET("/api/user", func(c *gin.Context) {
-		// When no auth configured, return 204
-		c.Status(http.StatusNoContent)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/user", nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNoContent, w.Code)
 }
@@ -71,46 +65,55 @@ func TestUserEndpointNoAuth(t *testing.T) {
 func TestPoliciesEndpointRequiresClusterParam(t *testing.T) {
 	t.Parallel()
 
-	router := setupTestRouter()
-	router.GET("/api/policies", func(c *gin.Context) {
-		cluster := c.Query("cluster")
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/policies", func(w http.ResponseWriter, r *http.Request) {
+		cluster := r.URL.Query().Get("cluster")
+		w.Header().Set("Content-Type", "application/json")
 		if cluster == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "cluster parameter required"})
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":"cluster parameter required"}`))
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"policies": []interface{}{}})
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"policies":[]}`))
 	})
 
-	// Without cluster param
+	// Without cluster param.
 	req := httptest.NewRequest(http.MethodGet, "/api/policies", nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
-	// With cluster param
+	// With cluster param.
 	req = httptest.NewRequest(http.MethodGet, "/api/policies?cluster=test-cluster&namespace=flux-system", nil)
 	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestCreatePolicyEndpointValidation(t *testing.T) {
 	t.Parallel()
 
-	router := setupTestRouter()
-	router.POST("/api/policies", func(c *gin.Context) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/policies", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			Name            string `json:"name" binding:"required"`
-			Namespace       string `json:"namespace" binding:"required"`
-			ImageRepository string `json:"imageRepository" binding:"required"`
-			SemverRange     string `json:"semverRange" binding:"required"`
+			Name            string `json:"name"`
+			Namespace       string `json:"namespace"`
+			ImageRepository string `json:"imageRepository"`
+			SemverRange     string `json:"semverRange"`
 		}
-		bindErr := c.ShouldBindJSON(&body)
-		if bindErr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": bindErr.Error()})
+
+		decodeErr := json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "application/json")
+
+		if decodeErr != nil || body.Name == "" || body.Namespace == "" || body.ImageRepository == "" || body.SemverRange == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":"missing required fields"}`))
 			return
 		}
-		c.JSON(http.StatusCreated, gin.H{"message": "created"})
+
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"message":"created"}`))
 	})
 
 	tests := []struct {
@@ -156,7 +159,7 @@ func TestCreatePolicyEndpointValidation(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/api/policies?cluster=test", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
-			router.ServeHTTP(w, req)
+			mux.ServeHTTP(w, req)
 			assert.Equal(t, tt.wantStatus, w.Code)
 		})
 	}
@@ -165,28 +168,33 @@ func TestCreatePolicyEndpointValidation(t *testing.T) {
 func TestUpdatePolicyEndpointValidation(t *testing.T) {
 	t.Parallel()
 
-	router := setupTestRouter()
-	router.PUT("/api/policies/:namespace/:name", func(c *gin.Context) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/policies/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			SemverRange string `json:"semverRange" binding:"required"`
+			SemverRange string `json:"semverRange"`
 		}
-		bindErr := c.ShouldBindJSON(&body)
-		if bindErr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": bindErr.Error()})
+
+		decodeErr := json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "application/json")
+
+		if decodeErr != nil || body.SemverRange == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":"semverRange required"}`))
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"message":   "updated",
-			"namespace": c.Param("namespace"),
-			"name":      c.Param("name"),
-		})
+
+		ns := r.PathValue("namespace")
+		nm := r.PathValue("name")
+		resp := map[string]string{"message": "updated", "namespace": ns, "name": nm}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 
-	// Valid update
+	// Valid update.
 	req := httptest.NewRequest(http.MethodPut, "/api/policies/default/my-policy?cluster=test", strings.NewReader(`{"semverRange":">=2.0.0"}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var response map[string]string
@@ -195,29 +203,30 @@ func TestUpdatePolicyEndpointValidation(t *testing.T) {
 	assert.Equal(t, "default", response["namespace"])
 	assert.Equal(t, "my-policy", response["name"])
 
-	// Missing semverRange
+	// Missing semverRange.
 	req = httptest.NewRequest(http.MethodPut, "/api/policies/default/my-policy?cluster=test", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestDeletePolicyEndpoint(t *testing.T) {
 	t.Parallel()
 
-	router := setupTestRouter()
-	router.DELETE("/api/policies/:namespace/:name", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message":   "deleted",
-			"namespace": c.Param("namespace"),
-			"name":      c.Param("name"),
-		})
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/policies/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
+		ns := r.PathValue("namespace")
+		nm := r.PathValue("name")
+		resp := map[string]string{"message": "deleted", "namespace": ns, "name": nm}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/policies/default/my-policy?cluster=test", nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 

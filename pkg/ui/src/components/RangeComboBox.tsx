@@ -88,26 +88,59 @@ export function RangeComboBox({ currentRange, availableVersions, onRangeChange }
   };
 
   return (
-    <div ref={containerRef} className="relative">
-      <div className="flex">
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <div style={{ display: "flex" }}>
         <input
           type="text"
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onFocus={handleToggle}
-          className="w-32 rounded-l border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          style={{
+            width: "130px",
+            padding: "6px 8px",
+            border: "1px solid var(--border-color)",
+            borderRight: "none",
+            borderRadius: "4px 0 0 4px",
+            backgroundColor: "var(--bg-color)",
+            color: "var(--text-color)",
+            fontSize: "13px",
+            fontFamily: "monospace",
+            outline: "none",
+          }}
         />
         <button
           type="button"
           onClick={handleToggle}
-          className="rounded-r border border-l-0 border-gray-300 bg-gray-50 px-2 py-1 hover:bg-gray-100"
+          style={{
+            padding: "6px 8px",
+            border: "1px solid var(--border-color)",
+            borderRadius: "0 4px 4px 0",
+            backgroundColor: "var(--bg-secondary)",
+            color: "var(--text-muted)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+          }}
         >
-          <ChevronDown className="h-3 w-3" />
+          <ChevronDown size={12} />
         </button>
       </div>
       {isOpen && sortedVersions.length > 0 && (
-        <ul className="absolute z-10 mt-1 max-h-48 w-48 overflow-auto rounded border border-gray-200 bg-white shadow-lg">
+        <ul style={{
+          position: "absolute",
+          zIndex: 10,
+          marginTop: "4px",
+          maxHeight: "200px",
+          width: "200px",
+          overflowY: "auto",
+          borderRadius: "4px",
+          border: "1px solid var(--border-color)",
+          backgroundColor: "var(--bg-color)",
+          boxShadow: "var(--shadow-lg)",
+          listStyle: "none",
+          padding: 0,
+        }}>
           {sortedVersions.map((version) => {
             const isSelected = currentRange === `>=${version}`;
             return (
@@ -115,16 +148,27 @@ export function RangeComboBox({ currentRange, availableVersions, onRangeChange }
                 <button
                   type="button"
                   onClick={(): void => handleVersionClick(version)}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-blue-50"
+                  style={{
+                    display: "flex",
+                    width: "100%",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "6px 12px",
+                    textAlign: "left",
+                    fontSize: "13px",
+                    fontFamily: "monospace",
+                    backgroundColor: "transparent",
+                    border: "none",
+                    color: isPreRelease(version) ? "var(--text-muted)" : "var(--text-color)",
+                    cursor: "pointer",
+                  }}
                 >
                   {isSelected ? (
-                    <Check className="h-3 w-3 text-blue-600" />
+                    <Check size={12} style={{ color: "var(--button-bg)" }} />
                   ) : (
-                    <span className="h-3 w-3" />
+                    <span style={{ width: "12px" }} />
                   )}
-                  <span className={isPreRelease(version) ? "text-gray-400" : "text-gray-900"}>
-                    {version}
-                  </span>
+                  {version}
                 </button>
               </li>
             );

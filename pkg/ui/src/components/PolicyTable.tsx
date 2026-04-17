@@ -17,6 +17,25 @@ interface PolicyTableProps {
 
 const MAX_VISIBLE_VERSIONS = 5;
 
+const thStyle: React.CSSProperties = {
+  padding: "12px",
+  textAlign: "left",
+  fontWeight: 600,
+  fontSize: "12px",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  color: "var(--text-muted)",
+  backgroundColor: "var(--table-header-bg)",
+  borderBottom: "1px solid var(--border-color)",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "12px",
+  borderBottom: "1px solid var(--border-color)",
+  fontSize: "14px",
+  color: "var(--text-color)",
+};
+
 export function PolicyTable({ policies, cluster, onPolicyUpdated }: PolicyTableProps): React.ReactElement {
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -59,7 +78,15 @@ export function PolicyTable({ policies, cluster, onPolicyUpdated }: PolicyTableP
 
   if (policies.length === 0) {
     return (
-      <div className="rounded border border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-500">
+      <div style={{
+        padding: "32px",
+        textAlign: "center",
+        fontSize: "14px",
+        color: "var(--text-muted)",
+        backgroundColor: "var(--bg-color)",
+        borderRadius: "8px",
+        border: "1px solid var(--border-color)",
+      }}>
         No image policies found in this namespace.
       </div>
     );
@@ -68,90 +95,142 @@ export function PolicyTable({ policies, cluster, onPolicyUpdated }: PolicyTableP
   return (
     <div>
       {actionError && (
-        <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div style={{
+          marginBottom: "16px",
+          padding: "8px 12px",
+          borderRadius: "4px",
+          backgroundColor: "var(--error-color)",
+          color: "white",
+          fontSize: "14px",
+        }}>
           {actionError}
         </div>
       )}
-      <div className="overflow-x-auto rounded border border-gray-200">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+      <div style={{
+        overflowX: "auto",
+        borderRadius: "8px",
+        boxShadow: "var(--shadow)",
+        backgroundColor: "var(--bg-color)",
+      }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+          <thead>
             <tr>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Image</th>
-              <th className="px-4 py-3">Semver Range</th>
-              <th className="px-4 py-3">Latest Version</th>
-              <th className="px-4 py-3">Available Versions</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Actions</th>
+              <th style={thStyle}>Name</th>
+              <th style={thStyle}>Image</th>
+              <th style={thStyle}>Semver Range</th>
+              <th style={thStyle}>Latest Version</th>
+              <th style={thStyle}>Available Versions</th>
+              <th style={thStyle}>Status</th>
+              <th style={thStyle}>Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody>
             {policies.map((policy) => {
               const key = policyKey(policy);
-              const visibleVersions = policy.availableVersions.slice(0, MAX_VISIBLE_VERSIONS);
-              const remainingCount = policy.availableVersions.length - MAX_VISIBLE_VERSIONS;
+              const versions = policy.availableVersions ?? [];
+              const visibleVersions = versions.slice(0, MAX_VISIBLE_VERSIONS);
+              const remainingCount = versions.length - MAX_VISIBLE_VERSIONS;
               const isConfirming = confirmingDelete === key;
 
               return (
-                <tr key={key} className="hover:bg-gray-50">
-                  <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900">
+                <tr key={key}>
+                  <td style={{ ...tdStyle, fontWeight: 500, whiteSpace: "nowrap" }}>
                     {policy.name}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">
-                    <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs">
+                  <td style={tdStyle}>
+                    <span style={{
+                      fontFamily: "monospace",
+                      fontSize: "12px",
+                      backgroundColor: "var(--bg-secondary)",
+                      padding: "2px 6px",
+                      borderRadius: "3px",
+                    }}>
                       {policy.imageUrl}
-                    </code>
+                    </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td style={tdStyle}>
                     <RangeComboBox
                       currentRange={policy.semverRange}
-                      availableVersions={policy.availableVersions}
+                      availableVersions={versions}
                       onRangeChange={(newRange): void => {
                         void handleRangeChange({ policy, newRange });
                       }}
                     />
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3">
-                    <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                  <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                    <span style={{
+                      fontFamily: "monospace",
+                      fontSize: "12px",
+                      backgroundColor: "var(--border-color)",
+                      padding: "2px 6px",
+                      borderRadius: "3px",
+                    }}>
                       {policy.latestVersion || "N/A"}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
+                  <td style={tdStyle}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                       {visibleVersions.map((version) => (
                         <span
                           key={version}
-                          className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600"
+                          style={{
+                            fontFamily: "monospace",
+                            fontSize: "12px",
+                            backgroundColor: "var(--border-color)",
+                            padding: "2px 6px",
+                            borderRadius: "3px",
+                          }}
                         >
                           {version}
                         </span>
                       ))}
                       {remainingCount > 0 && (
-                        <span className="rounded bg-gray-200 px-1.5 py-0.5 text-xs text-gray-500">
+                        <span style={{
+                          fontSize: "12px",
+                          color: "var(--text-muted)",
+                          padding: "2px 6px",
+                        }}>
                           +{remainingCount} more
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td style={tdStyle}>
                     <StatusBadge ready={policy.ready} message={policy.message} />
                   </td>
-                  <td className="px-4 py-3">
+                  <td style={tdStyle}>
                     {isConfirming ? (
-                      <div className="flex items-center gap-2">
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <button
                           type="button"
                           onClick={(): void => {
                             void handleDelete({ policy });
                           }}
-                          className="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
+                          style={{
+                            padding: "4px 10px",
+                            border: "none",
+                            borderRadius: "4px",
+                            backgroundColor: "var(--error-color)",
+                            color: "white",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
                         >
                           Confirm
                         </button>
                         <button
                           type="button"
                           onClick={(): void => setConfirmingDelete(null)}
-                          className="rounded bg-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-300"
+                          style={{
+                            padding: "4px 10px",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: "4px",
+                            backgroundColor: "var(--bg-color)",
+                            color: "var(--text-color)",
+                            fontSize: "12px",
+                            cursor: "pointer",
+                          }}
                         >
                           Cancel
                         </button>
@@ -160,10 +239,17 @@ export function PolicyTable({ policies, cluster, onPolicyUpdated }: PolicyTableP
                       <button
                         type="button"
                         onClick={(): void => setConfirmingDelete(key)}
-                        className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                        style={{
+                          padding: "6px",
+                          border: "none",
+                          borderRadius: "4px",
+                          backgroundColor: "transparent",
+                          color: "var(--text-muted)",
+                          cursor: "pointer",
+                        }}
                         title="Delete policy"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 size={16} />
                       </button>
                     )}
                   </td>

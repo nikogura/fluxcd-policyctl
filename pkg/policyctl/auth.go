@@ -17,14 +17,18 @@ package policyctl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
+
+type contextKey string
+
+const userClaimsKey contextKey = "userClaims"
 
 // AuthConfig holds OIDC authentication configuration.
 type AuthConfig struct {
@@ -41,17 +45,36 @@ type UserClaims struct {
 	Groups []string `json:"groups"`
 }
 
-// NewOIDCMiddleware creates a Gin middleware for OIDC token validation.
-func NewOIDCMiddleware(config *AuthConfig, logger *zap.Logger) (middleware gin.HandlerFunc, err error) {
+// GetUserClaims retrieves user claims from request context.
+func GetUserClaims(ctx context.Context) (claims *UserClaims) {
+	val := ctx.Value(userClaimsKey)
+	if val == nil {
+		claims = nil
+		return claims
+	}
+
+	uc, ok := val.(UserClaims)
+	if !ok {
+		claims = nil
+		return claims
+	}
+
+	claims = &uc
+	return claims
+}
+
+// NewOIDCMiddleware creates an HTTP middleware for OIDC token validation.
+func NewOIDCMiddleware(config *AuthConfig, logger *zap.Logger) (middleware func(http.Handler) http.Handler, err error) {
 	if !config.Enabled {
-		// Return passthrough middleware when auth is disabled
-		middleware = func(c *gin.Context) {
-			c.Next()
+		// Passthrough when auth is disabled.
+		middleware = func(next http.Handler) (wrapped http.Handler) {
+			wrapped = next
+			return wrapped
 		}
 		return middleware, err
 	}
 
-	// Create OIDC provider
+	// Create OIDC provider.
 	ctx := context.Background()
 	var provider *oidc.Provider
 
@@ -61,7 +84,7 @@ func NewOIDCMiddleware(config *AuthConfig, logger *zap.Logger) (middleware gin.H
 		return middleware, err
 	}
 
-	// Create token verifier
+	// Create token verifier.
 	verifierConfig := &oidc.Config{
 		ClientID: config.Audience,
 	}
@@ -71,69 +94,84 @@ func NewOIDCMiddleware(config *AuthConfig, logger *zap.Logger) (middleware gin.H
 	return middleware, err
 }
 
-// createAuthMiddleware builds the actual Gin middleware handler for OIDC authentication.
-func createAuthMiddleware(verifier *oidc.IDTokenVerifier, config *AuthConfig, logger *zap.Logger) (handler gin.HandlerFunc) {
-	handler = func(c *gin.Context) {
-		// Extract Authorization header
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing Authorization header"})
-			return
-		}
+// extractBearerToken extracts and validates the Bearer token from the Authorization header.
+func extractBearerToken(r *http.Request) (token string, err error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		err = errors.New("missing Authorization header")
+		return token, err
+	}
 
-		// Verify Bearer token format
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid Authorization header format"})
-			return
-		}
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		err = errors.New("invalid Authorization header format")
+		return token, err
+	}
 
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	token = strings.TrimPrefix(authHeader, "Bearer ")
+	return token, err
+}
 
-		// Verify the token
-		idToken, verifyErr := verifier.Verify(c.Request.Context(), tokenString)
-		if verifyErr != nil {
-			logger.Warn("Token verification failed", zap.Error(verifyErr))
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-			return
-		}
+// extractClaims verifies the token and extracts user claims.
+func extractClaims(r *http.Request, verifier *oidc.IDTokenVerifier) (claims UserClaims, err error) {
+	var tokenString string
+	tokenString, err = extractBearerToken(r)
+	if err != nil {
+		return claims, err
+	}
 
-		// Extract claims
-		var rawClaims json.RawMessage
-		claimsErr := idToken.Claims(&rawClaims)
+	idToken, verifyErr := verifier.Verify(r.Context(), tokenString)
+	if verifyErr != nil {
+		err = fmt.Errorf("token verification failed: %w", verifyErr)
+		return claims, err
+	}
 
-		if claimsErr != nil {
-			logger.Error("Failed to extract token claims", zap.Error(claimsErr))
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to process token"})
-			return
-		}
+	var rawClaims json.RawMessage
+	claimsErr := idToken.Claims(&rawClaims)
+	if claimsErr != nil {
+		err = fmt.Errorf("failed to extract claims: %w", claimsErr)
+		return claims, err
+	}
 
-		var claims UserClaims
-		unmarshalErr := json.Unmarshal(rawClaims, &claims)
+	unmarshalErr := json.Unmarshal(rawClaims, &claims)
+	if unmarshalErr != nil {
+		err = fmt.Errorf("failed to unmarshal claims: %w", unmarshalErr)
+		return claims, err
+	}
 
-		if unmarshalErr != nil {
-			logger.Error("Failed to unmarshal token claims", zap.Error(unmarshalErr))
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to process token claims"})
-			return
-		}
+	return claims, err
+}
 
-		// Check group membership if configured
-		if len(config.AllowedGroups) > 0 {
-			if !isGroupMember(claims.Groups, config.AllowedGroups) {
+// createAuthMiddleware builds the actual middleware handler for OIDC authentication.
+func createAuthMiddleware(verifier *oidc.IDTokenVerifier, config *AuthConfig, logger *zap.Logger) (middleware func(http.Handler) http.Handler) {
+	middleware = func(next http.Handler) (wrapped http.Handler) {
+		wrapped = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims, err := extractClaims(r, verifier)
+			if err != nil {
+				logger.Warn("Authentication failed", zap.Error(err))
+				writeError(w, http.StatusUnauthorized, "authentication failed")
+				return
+			}
+
+			// Check group membership if configured.
+			if len(config.AllowedGroups) > 0 && !isGroupMember(claims.Groups, config.AllowedGroups) {
 				logger.Warn("User not in allowed groups",
 					zap.String("email", claims.Email),
 					zap.Strings("userGroups", claims.Groups),
 					zap.Strings("allowedGroups", config.AllowedGroups),
 				)
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "insufficient group membership"})
+				writeError(w, http.StatusForbidden, "insufficient group membership")
 				return
 			}
-		}
 
-		// Store claims in context
-		c.Set("userClaims", claims)
-		c.Next()
+			// Store claims in context.
+			ctx := context.WithValue(r.Context(), userClaimsKey, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+
+		return wrapped
 	}
-	return handler
+
+	return middleware
 }
 
 // isGroupMember checks if any of the user's groups match the allowed groups.
@@ -146,6 +184,7 @@ func isGroupMember(userGroups []string, allowedGroups []string) (member bool) {
 			}
 		}
 	}
+
 	member = false
 	return member
 }

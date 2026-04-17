@@ -10,6 +10,31 @@ interface ClusterSelectorProps {
   readonly onClusterChange: (cluster: string) => void;
 }
 
+const selectStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  border: "1px solid var(--border-color)",
+  borderRadius: "4px",
+  backgroundColor: "var(--bg-color)",
+  color: "var(--text-color)",
+  fontSize: "14px",
+  cursor: "pointer",
+  outline: "none",
+};
+
+const disabledSelectStyle: React.CSSProperties = {
+  ...selectStyle,
+  cursor: "default",
+  opacity: 0.6,
+};
+
+const errorSelectStyle: React.CSSProperties = {
+  ...selectStyle,
+  borderColor: "var(--error-color)",
+  color: "var(--error-color)",
+  cursor: "default",
+  opacity: 0.6,
+};
+
 export function ClusterSelector({ selectedCluster, onClusterChange }: ClusterSelectorProps): React.ReactElement {
   const [clusters, setClusters] = useState<readonly ClusterInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +79,7 @@ export function ClusterSelector({ selectedCluster, onClusterChange }: ClusterSel
 
   if (loading) {
     return (
-      <select disabled className="rounded border border-gray-300 bg-gray-50 px-3 py-2 text-sm">
+      <select disabled style={disabledSelectStyle}>
         <option>Loading clusters...</option>
       </select>
     );
@@ -62,7 +87,7 @@ export function ClusterSelector({ selectedCluster, onClusterChange }: ClusterSel
 
   if (error) {
     return (
-      <select disabled className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">
+      <select disabled style={errorSelectStyle}>
         <option>Error loading clusters</option>
       </select>
     );
@@ -73,12 +98,12 @@ export function ClusterSelector({ selectedCluster, onClusterChange }: ClusterSel
   };
 
   return (
-    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", fontWeight: 500, color: "var(--text-color)" }}>
       Cluster
       <select
         value={selectedCluster ?? undefined}
         onChange={handleChange}
-        className="rounded border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        style={selectStyle}
       >
         {clusters.map((cluster) => (
           <option key={cluster.name} value={cluster.name}>

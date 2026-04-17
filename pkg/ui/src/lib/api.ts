@@ -42,12 +42,23 @@ async function apiCall<T>({ path, options }: { readonly path: string; readonly o
   return data;
 }
 
+interface ClustersResponse {
+  readonly inCluster: boolean;
+  readonly clusters: readonly ClusterInfo[];
+}
+
+interface NamespacesResponse {
+  readonly namespaces: readonly string[];
+}
+
 export async function fetchClusters(): Promise<readonly ClusterInfo[]> {
-  return apiCall<readonly ClusterInfo[]>({ path: "/clusters" });
+  const result = await apiCall<ClustersResponse>({ path: "/clusters" });
+  return result.clusters;
 }
 
 export async function fetchNamespaces({ cluster }: { readonly cluster: string }): Promise<readonly string[]> {
-  return apiCall<readonly string[]>({ path: `/namespaces?cluster=${encodeURIComponent(cluster)}` });
+  const result = await apiCall<NamespacesResponse>({ path: `/namespaces?cluster=${encodeURIComponent(cluster)}` });
+  return result.namespaces;
 }
 
 export async function fetchPolicies({ cluster, namespace }: { readonly cluster: string; readonly namespace: string }): Promise<readonly PolicyView[]> {

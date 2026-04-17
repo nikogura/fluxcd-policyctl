@@ -12,6 +12,31 @@ interface NamespaceSelectorProps {
 
 const DEFAULT_NAMESPACE = "flux-system";
 
+const selectStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  border: "1px solid var(--border-color)",
+  borderRadius: "4px",
+  backgroundColor: "var(--bg-color)",
+  color: "var(--text-color)",
+  fontSize: "14px",
+  cursor: "pointer",
+  outline: "none",
+};
+
+const disabledSelectStyle: React.CSSProperties = {
+  ...selectStyle,
+  cursor: "default",
+  opacity: 0.6,
+};
+
+const errorSelectStyle: React.CSSProperties = {
+  ...selectStyle,
+  borderColor: "var(--error-color)",
+  color: "var(--error-color)",
+  cursor: "default",
+  opacity: 0.6,
+};
+
 export function NamespaceSelector({ cluster, selectedNamespace, onNamespaceChange }: NamespaceSelectorProps): React.ReactElement {
   const [namespaces, setNamespaces] = useState<readonly string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,7 +79,7 @@ export function NamespaceSelector({ cluster, selectedNamespace, onNamespaceChang
 
   if (!cluster) {
     return (
-      <select disabled className="rounded border border-gray-300 bg-gray-50 px-3 py-2 text-sm">
+      <select disabled style={disabledSelectStyle}>
         <option>Select a cluster first</option>
       </select>
     );
@@ -62,7 +87,7 @@ export function NamespaceSelector({ cluster, selectedNamespace, onNamespaceChang
 
   if (loading) {
     return (
-      <select disabled className="rounded border border-gray-300 bg-gray-50 px-3 py-2 text-sm">
+      <select disabled style={disabledSelectStyle}>
         <option>Loading namespaces...</option>
       </select>
     );
@@ -70,7 +95,7 @@ export function NamespaceSelector({ cluster, selectedNamespace, onNamespaceChang
 
   if (error) {
     return (
-      <select disabled className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600">
+      <select disabled style={errorSelectStyle}>
         <option>Error loading namespaces</option>
       </select>
     );
@@ -81,12 +106,12 @@ export function NamespaceSelector({ cluster, selectedNamespace, onNamespaceChang
   };
 
   return (
-    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", fontWeight: 500, color: "var(--text-color)" }}>
       Namespace
       <select
         value={selectedNamespace ?? undefined}
         onChange={handleChange}
-        className="rounded border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        style={selectStyle}
       >
         {namespaces.map((ns) => (
           <option key={ns} value={ns}>
