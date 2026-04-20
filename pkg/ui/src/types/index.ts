@@ -32,4 +32,5 @@ export interface AppConfig {
   readonly inCluster: boolean;
   readonly allowedNamespaces: readonly string[] | null;
   readonly fixedNamespace: string | null;
+  readonly refreshIntervalSec: number;
 }

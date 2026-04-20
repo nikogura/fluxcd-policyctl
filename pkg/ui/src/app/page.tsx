@@ -11,7 +11,15 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { fetchConfig, fetchPolicies } from "@/lib/api";
 import type { AppConfig, PolicyView } from "@/types";
 
-const REFRESH_INTERVAL_MS = 30000;
+const DEFAULT_REFRESH_SEC = 30;
+
+const REFRESH_OPTIONS: readonly { readonly label: string; readonly sec: number }[] = [
+  { label: "5s", sec: 5 },
+  { label: "10s", sec: 10 },
+  { label: "30s", sec: 30 },
+  { label: "60s", sec: 60 },
+  { label: "5m", sec: 300 },
+];
 
 const IN_CLUSTER_NAME = String();
 
@@ -24,6 +32,7 @@ export default function DashboardPage(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [refreshSec, setRefreshSec] = useState(DEFAULT_REFRESH_SEC);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -32,11 +41,15 @@ export default function DashboardPage(): React.ReactElement {
         const result = await fetchConfig();
         setConfig(result);
 
+        if (result.refreshIntervalSec > 0) {
+          setRefreshSec(result.refreshIntervalSec);
+        }
+
         if (result.accessMode !== "local") {
           setCluster(IN_CLUSTER_NAME);
         }
       } catch {
-        setConfig({ accessMode: "local", inCluster: false, allowedNamespaces: null, fixedNamespace: null });
+        setConfig({ accessMode: "local", inCluster: false, allowedNamespaces: null, fixedNamespace: null, refreshIntervalSec: DEFAULT_REFRESH_SEC });
       }
     };
 
@@ -71,14 +84,14 @@ export default function DashboardPage(): React.ReactElement {
 
     intervalRef.current = setInterval(() => {
       void loadPolicies();
-    }, REFRESH_INTERVAL_MS);
+    }, refreshSec * 1000);
 
     return (): void => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [effectiveCluster, namespace, loadPolicies]);
+  }, [effectiveCluster, namespace, loadPolicies, refreshSec]);
 
   const handleClusterChange = (newCluster: string): void => {
     setCluster(newCluster);
@@ -143,6 +156,26 @@ export default function DashboardPage(): React.ReactElement {
             fixedNamespace={config?.fixedNamespace ?? null}
             allowedNamespaces={config?.allowedNamespaces ?? null}
           />
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--text-muted)" }}>
+            <RefreshCw size={12} />
+            <select
+              value={refreshSec}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>): void => setRefreshSec(Number(e.target.value))}
+              style={{
+                padding: "4px 8px",
+                border: "1px solid var(--border-color)",
+                borderRadius: "4px",
+                backgroundColor: "var(--bg-color)",
+                color: "var(--text-color)",
+                fontSize: "13px",
+                cursor: "pointer",
+              }}
+            >
+              {REFRESH_OPTIONS.map((opt) => (
+                <option key={opt.sec} value={opt.sec}>{opt.label}</option>
+              ))}
+            </select>
+          </label>
           <ThemeToggle />
         </div>
       </header>

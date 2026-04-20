@@ -23,10 +23,11 @@ import (
 
 // ConfigResponse is the JSON response for the /api/config endpoint.
 type ConfigResponse struct {
-	AccessMode        string   `json:"accessMode"`
-	InCluster         bool     `json:"inCluster"`
-	AllowedNamespaces []string `json:"allowedNamespaces"`
-	FixedNamespace    *string  `json:"fixedNamespace"`
+	AccessMode         string   `json:"accessMode"`
+	InCluster          bool     `json:"inCluster"`
+	AllowedNamespaces  []string `json:"allowedNamespaces"`
+	FixedNamespace     *string  `json:"fixedNamespace"`
+	RefreshIntervalSec int      `json:"refreshIntervalSec"`
 }
 
 // Handler holds route handlers for the fluxcd-policyctl API.
@@ -105,9 +106,15 @@ func (h *Handler) handleHealth(w http.ResponseWriter, _ *http.Request) {
 
 // handleGetConfig returns the current access mode and constraints for the frontend.
 func (h *Handler) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
+	refreshSec := h.accessConfig.RefreshIntervalSec
+	if refreshSec <= 0 {
+		refreshSec = 30
+	}
+
 	resp := ConfigResponse{
-		AccessMode: h.accessConfig.Mode,
-		InCluster:  h.accessConfig.Mode != AccessModeLocal,
+		AccessMode:         h.accessConfig.Mode,
+		InCluster:          h.accessConfig.Mode != AccessModeLocal,
+		RefreshIntervalSec: refreshSec,
 	}
 
 	switch h.accessConfig.Mode {

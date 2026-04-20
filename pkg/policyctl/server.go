@@ -36,9 +36,10 @@ const PodNamespaceFile = "/var/run/secrets/kubernetes.io/serviceaccount/namespac
 
 // AccessConfig defines how fluxcd-policyctl accesses Kubernetes resources.
 type AccessConfig struct {
-	Mode              string   // "local", "cluster", "namespaces", "namespace"
-	AllowedNamespaces []string // for "namespaces" mode
-	PodNamespace      string   // auto-detected for "namespace" mode
+	Mode               string   // "local", "cluster", "namespaces", "namespace"
+	AllowedNamespaces  []string // for "namespaces" mode
+	PodNamespace       string   // auto-detected for "namespace" mode
+	RefreshIntervalSec int      // default UI refresh interval in seconds (env: POLICYCTL_REFRESH_INTERVAL, default: 30)
 }
 
 // ValidAccessModes returns the list of valid access mode strings.

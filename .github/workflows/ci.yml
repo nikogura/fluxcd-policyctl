@@ -120,6 +120,29 @@ jobs:
         cd release-assets
         sha256sum * > checksums.txt
 
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        platforms: linux/amd64,linux/arm64
+        tags: |
+          ghcr.io/nikogura/fluxcd-policyctl:${{ needs.test.outputs.version }}
+          ghcr.io/nikogura/fluxcd-policyctl:latest
+
     - name: Tag Repo
       uses: mathieudutour/github-tag-action@v6.2
       with:
@@ -147,26 +170,3 @@ jobs:
           ```
 
           Then open: **http://localhost:9999**
-
-    - name: Log in to GHCR
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        platforms: linux/amd64,linux/arm64
-        tags: |
-          ghcr.io/nikogura/fluxcd-policyctl:${{ needs.test.outputs.version }}
-          ghcr.io/nikogura/fluxcd-policyctl:latest

@@ -17,6 +17,7 @@ package cmd
 import (
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/nikogura/fluxcd-policyctl/pkg/policyctl"
@@ -107,7 +108,8 @@ Example (with OIDC authentication):
 		}
 
 		accessConfig := &policyctl.AccessConfig{
-			Mode: resolvedMode,
+			Mode:               resolvedMode,
+			RefreshIntervalSec: resolveRefreshInterval(),
 		}
 
 		// Resolve allowed namespaces for "namespaces" mode.
@@ -149,6 +151,24 @@ func resolveAllowedNamespaces() (ns string) {
 
 	ns = os.Getenv("POLICYCTL_NAMESPACES")
 	return ns
+}
+
+// resolveRefreshInterval returns the UI refresh interval in seconds from the env var, defaulting to 30.
+func resolveRefreshInterval() (sec int) {
+	sec = 30
+
+	envVal := os.Getenv("POLICYCTL_REFRESH_INTERVAL")
+	if envVal == "" {
+		return sec
+	}
+
+	parsed, err := strconv.Atoi(envVal)
+	if err != nil || parsed <= 0 {
+		return sec
+	}
+
+	sec = parsed
+	return sec
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
