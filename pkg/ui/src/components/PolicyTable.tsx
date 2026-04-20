@@ -107,7 +107,6 @@ export function PolicyTable({ policies, cluster, onPolicyUpdated }: PolicyTableP
         </div>
       )}
       <div style={{
-        overflowX: "auto",
         borderRadius: "8px",
         boxShadow: "var(--shadow)",
         backgroundColor: "var(--bg-color)",
