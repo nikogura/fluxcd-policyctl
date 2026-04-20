@@ -77,9 +77,8 @@ export function RangeComboBox({ currentRange, availableVersions, onRangeChange }
   };
 
   const handleVersionClick = (version: string): void => {
-    const constraint = `>=${version}`;
-    setInputValue(constraint);
-    onRangeChange(constraint);
+    setInputValue(version);
+    onRangeChange(version);
     setIsOpen(false);
   };
 
@@ -142,7 +141,7 @@ export function RangeComboBox({ currentRange, availableVersions, onRangeChange }
           padding: 0,
         }}>
           {sortedVersions.map((version) => {
-            const isSelected = currentRange === `>=${version}`;
+            const isSelected = currentRange === version || currentRange === `>=${version}`;
             return (
               <li key={version}>
                 <button
