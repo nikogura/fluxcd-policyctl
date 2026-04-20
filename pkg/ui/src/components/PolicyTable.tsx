@@ -117,7 +117,7 @@ export function PolicyTable({ policies, cluster, onPolicyUpdated }: PolicyTableP
               <th style={thStyle}>Name</th>
               <th style={thStyle}>Image</th>
               <th style={thStyle}>Semver Range</th>
-              <th style={thStyle}>Latest Version</th>
+              <th style={thStyle}>Selected Version</th>
               <th style={thStyle}>Available Versions</th>
               <th style={thStyle}>Status</th>
               <th style={thStyle}>Actions</th>
